@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MahByMe — Design Your Custom Mahjong Set</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --ivory: #F5F0E8; --gold: #C9A84C; --gold-light: #E8C96A;
+    --ink: #1A1510; --tile-bg: #F7F3EB; --border: rgba(201,168,76,0.3);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--ink); font-family: 'DM Sans', sans-serif; color: var(--ivory); min-height: 100vh; }
+  body::before { content: ''; position: fixed; inset: 0; background-image: radial-gradient(circle at 15% 25%, rgba(201,168,76,0.07) 0%, transparent 45%), radial-gradient(circle at 85% 75%, rgba(201,168,76,0.05) 0%, transparent 45%); pointer-events: none; z-index: 0; }
+
+  header { position: relative; z-index: 10; padding: 28px 48px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 900; font-style: italic; color: var(--gold); }
+  .logo span { color: var(--ivory); }
+  .gen-counter { display: flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-size: 11px; }
+  .gen-dots { display: flex; gap: 4px; }
+  .gen-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); transition: all 0.3s; }
+  .gen-dot.used { background: rgba(201,168,76,0.2); border: 1px solid rgba(201,168,76,0.3); }
+  .gen-dot.last { background: #FF6B6B; box-shadow: 0 0 6px rgba(255,107,107,0.5); }
+  .gen-label { color: rgba(245,240,232,0.4); letter-spacing: 1px; }
+
+  .limit-overlay { position: fixed; inset: 0; background: rgba(26,21,16,0.92); z-index: 100; display: none; align-items: center; justify-content: center; }
+  .limit-overlay.visible { display: flex; }
+  .limit-modal { background: #2A2118; border: 1px solid var(--gold); border-radius: 8px; padding: 48px; text-align: center; max-width: 440px; width: 90%; box-shadow: 0 24px 80px rgba(0,0,0,0.6); }
+  .limit-modal h2 { font-family: 'Playfair Display', serif; font-size: 28px; color: var(--gold); margin-bottom: 12px; }
+  .limit-modal p { font-size: 14px; color: rgba(245,240,232,0.6); line-height: 1.7; margin-bottom: 28px; }
+  .limit-modal-btn { width: 100%; padding: 14px; background: var(--gold); color: var(--ink); border: none; font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; cursor: pointer; border-radius: 3px; margin-bottom: 10px; }
+  .limit-modal-dismiss { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(245,240,232,0.3); letter-spacing: 1px; cursor: pointer; text-transform: uppercase; }
+
+  .main { position: relative; z-index: 10; max-width: 1280px; margin: 0 auto; padding: 40px 48px; display: grid; grid-template-columns: 460px 1fr; gap: 56px; align-items: start; }
+  .left h1 { font-family: 'Playfair Display', serif; font-size: 38px; font-weight: 900; line-height: 1.05; margin-bottom: 10px; }
+  .left h1 em { font-style: italic; color: var(--gold); }
+  .left > p { font-size: 14px; line-height: 1.7; color: rgba(245,240,232,0.5); margin-bottom: 28px; }
+
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .upload-slot { position: relative; border: 1.5px dashed rgba(201,168,76,0.3); border-radius: 4px; padding: 14px; cursor: pointer; transition: all 0.2s; background: rgba(201,168,76,0.03); overflow: hidden; }
+  .upload-slot:hover { border-color: var(--gold); background: rgba(201,168,76,0.07); }
+  .upload-slot.filled { border-color: var(--gold); border-style: solid; }
+  .upload-slot.processing { border-color: #50C878; animation: pulse 1.5s infinite; }
+  .upload-slot.done { border-color: #50C878; border-style: solid; }
+  .upload-slot input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+  .slot-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .slot-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); }
+  .slot-sublabel { font-size: 11px; color: rgba(245,240,232,0.4); margin-bottom: 6px; }
+  .slot-check { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .slot-check input[type=checkbox] { width: 13px; height: 13px; accent-color: var(--gold); cursor: pointer; }
+  .slot-check span { font-family: 'DM Mono', monospace; font-size: 9px; color: rgba(245,240,232,0.4); letter-spacing: 1px; }
+  .slot-preview { width: 100%; height: 52px; object-fit: cover; border-radius: 2px; margin-top: 6px; display: none; }
+  .slot-preview.visible { display: block; }
+  .slot-ai-preview { width: 100%; height: 52px; object-fit: cover; border-radius: 2px; margin-top: 4px; display: none; border: 1px solid rgba(80,200,120,0.4); }
+  .slot-ai-preview.visible { display: block; }
+  .slot-status { font-family: 'DM Mono', monospace; font-size: 9px; margin-top: 4px; min-height: 12px; }
+  .slot-status.generating { color: #E8C96A; }
+  .slot-status.done { color: #50C878; }
+  .slot-status.error { color: #FF6B6B; }
+  .saved-versions { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+  .saved-thumb { width: 24px; height: 24px; object-fit: cover; border-radius: 2px; border: 1px solid rgba(201,168,76,0.3); cursor: pointer; transition: all 0.15s; }
+  .saved-thumb:hover { border-color: var(--gold); transform: scale(1.1); }
+  .saved-thumb.active-thumb { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+
+  .section-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: rgba(245,240,232,0.35); margin-bottom: 10px; }
+  .art-style-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 8px; }
+  .art-btn { padding: 0; border: 1.5px solid rgba(201,168,76,0.15); background: rgba(255,255,255,0.03); border-radius: 5px; cursor: pointer; transition: all 0.2s; overflow: hidden; display: flex; flex-direction: column; }
+  .art-btn:hover { border-color: rgba(201,168,76,0.5); transform: translateY(-1px); }
+  .art-btn.active { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+  .art-btn-swatch { height: 48px; width: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px; position: relative; }
+  .swatch-illustrated { background: linear-gradient(135deg,#E8C9A0,#D4A574,#C19A6B); }
+  .swatch-watercolor { background: linear-gradient(135deg,#B8D4E8,#E8B8C8,#B8E8C8); }
+  .swatch-bold { background: linear-gradient(135deg,#FF6B9D,#C44DFF,#4DAFFF); }
+  .art-btn-label { padding: 6px 4px; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: rgba(245,240,232,0.6); text-align: center; background: rgba(0,0,0,0.3); }
+  .art-btn.active .art-btn-label { color: var(--gold); }
+  .art-style-desc { font-size: 11px; color: rgba(245,240,232,0.4); font-style: italic; min-height: 16px; margin-bottom: 16px; }
+
+  .overlay-section { margin-bottom: 20px; }
+  .style-picker { display: flex; gap: 8px; }
+  .style-btn { flex:1; padding:8px; border:1px solid rgba(201,168,76,0.2); background:transparent; color:var(--ivory); font-family:'DM Sans',sans-serif; font-size:12px; cursor:pointer; border-radius:2px; transition:all 0.15s; }
+  .style-btn:hover { border-color:var(--gold); }
+  .style-btn.active { background:var(--gold); color:var(--ink); border-color:var(--gold); font-weight:600; }
+
+  .select-all-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .select-all-btn { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--gold); background: none; border: 1px solid var(--border); padding: 5px 10px; cursor: pointer; border-radius: 2px; }
+  .progress-text { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(245,240,232,0.3); }
+
+  .action-row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .generate-btn { flex: 1; padding: 14px; background: var(--gold); color: var(--ink); border: none; font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; cursor: pointer; border-radius: 3px; transition: all 0.2s; }
+  .generate-btn:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(201,168,76,0.3); }
+  .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .regen-btn { padding: 14px 18px; background: transparent; border: 1.5px solid var(--gold); color: var(--gold); font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 3px; }
+  .regen-btn:hover { background: rgba(201,168,76,0.1); }
+  .regen-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .right { position: sticky; top: 32px; }
+  .preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .preview-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; }
+  .tile-count { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(245,240,232,0.35); letter-spacing: 1px; }
+  .active-style-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 10px; color: var(--gold); letter-spacing: 1px; margin-bottom: 14px; text-transform: uppercase; }
+  .category-tabs { display: flex; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .tab { padding: 7px 11px 9px; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(245,240,232,0.35); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none; }
+  .tab:hover { color: var(--ivory); }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tile-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; min-height: 260px; }
+
+  .tile { position: relative; width: 100%; aspect-ratio: 0.72; background: var(--tile-bg); border-radius: 4px; box-shadow: 0 4px 0 0 #C8BFA8, 0 5px 8px rgba(26,21,16,0.18), inset 0 1px 0 rgba(255,255,255,0.8); overflow: hidden; transition: transform 0.2s; }
+  .tile:hover { transform: translateY(-3px) scale(1.06); z-index: 5; }
+  .tile-inner { position: absolute; inset: 4px; border: 1px solid rgba(201,168,76,0.2); border-radius: 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+  .tile-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .overlay-bg { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.38) 100%); z-index: 2; }
+  .tile-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 3; }
+  .tile-number { font-family: 'Playfair Display', serif; font-weight: 900; line-height: 1; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  .tile-suit-icon { font-size: 7px; line-height: 1; margin-top: 2px; opacity: 0.85; }
+  .tile-honor-text { font-family: 'Playfair Display', serif; font-weight: 900; font-size: 11px; line-height: 1; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+  .overlay-minimal .tile-number { font-size: 17px; color: rgba(255,255,255,0.95); }
+  .overlay-minimal .tile-honor-text { color: rgba(255,255,255,0.95); font-size: 10px; }
+  .overlay-classic .tile-number { font-size: 15px; color: #1A1510; text-shadow: 0 1px 2px rgba(255,255,255,0.5); }
+  .overlay-classic .tile-honor-text { color: #1A1510; text-shadow: 0 1px 2px rgba(255,255,255,0.5); }
+  .overlay-bold .tile-number { font-size: 19px; color: #FFD700; }
+  .overlay-bold .tile-honor-text { color: #FFD700; font-size: 12px; }
+  .suit-crak.overlay-minimal .tile-number { color: #FF8080; }
+  .honor-red .tile-honor-text { color: #FF5050 !important; }
+  .honor-green .tile-honor-text { color: #50FF80 !important; }
+
+  .filter-illustrated .tile-img { filter: saturate(1.3) contrast(1.15) brightness(1.05); }
+  .filter-watercolor .tile-img { filter: saturate(0.7) brightness(1.1) contrast(0.85) blur(0.4px); }
+  .filter-bold .tile-img { filter: saturate(1.8) contrast(1.3) brightness(1.05); }
+
+  .tile-loading .tile-inner { background: linear-gradient(90deg, #2A2118 25%, #3A3128 50%, #2A2118 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  .tile-empty .tile-inner { background: linear-gradient(135deg, #F7F3EB 0%, #EDE8DC 100%); }
+  .tile-placeholder { font-family: 'DM Mono', monospace; font-size: 9px; color: rgba(201,168,76,0.4); text-align: center; padding: 4px; }
+  .tile-joker .tile-honor-text { font-size: 8px !important; letter-spacing: 1px; text-transform: uppercase; }
+  .preview-note { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(245,240,232,0.2); text-align: center; margin-top: 12px; letter-spacing: 1px; }
+
+  .bottom-cta { position: relative; z-index: 10; border-top: 1px solid var(--border); padding: 32px 48px; display: flex; align-items: center; justify-content: space-between; background: rgba(201,168,76,0.03); }
+  .cta-text h3 { font-family: 'Playfair Display', serif; font-size: 18px; margin-bottom: 4px; }
+  .cta-text p { font-size: 12px; color: rgba(245,240,232,0.4); }
+  .price-tag { font-family: 'Playfair Display', serif; font-size: 32px; font-weight: 900; color: var(--gold); margin-right: 20px; }
+  .price-tag span { font-size: 12px; font-family: 'DM Sans', sans-serif; color: rgba(245,240,232,0.35); font-weight: 300; }
+  .order-btn { padding: 12px 24px; background: transparent; border: 1.5px solid var(--gold); color: var(--gold); font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 2px; }
+  .order-btn:hover { background: var(--gold); color: var(--ink); }
+  @keyframes tileIn { from { opacity: 0; transform: translateY(6px) scale(0.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .tile { animation: tileIn 0.25s ease both; }
+  @media (max-width: 960px) { .main { grid-template-columns: 1fr; gap: 40px; } .right { position: static; } header, .main, .bottom-cta { padding-left: 20px; padding-right: 20px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Mah<span>By</span>Me</div>
+  <div class="gen-counter">
+    <span class="gen-label">FREE GENS</span>
+    <div class="gen-dots" id="gen-dots"></div>
+    <span class="gen-label" id="gen-label-text">3 LEFT</span>
+  </div>
+</header>
+
+<div class="limit-overlay" id="limit-overlay">
+  <div class="limit-modal">
+    <h2>You're loving it 🀄</h2>
+    <p>You've used your 3 free design generations. Place your order to unlock unlimited regenerations and get your full-resolution tiles sent to production.</p>
+    <button class="limit-modal-btn" onclick="document.getElementById('limit-overlay').classList.remove('visible')">Order My Custom Set — $189</button>
+    <div class="limit-modal-dismiss" onclick="document.getElementById('limit-overlay').classList.remove('visible')">maybe later</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="left">
+    <h1>Your photos.<br><em>Hand-painted tiles.</em></h1>
+    <p>Upload an image for each suit. Our AI transforms them into beautiful hand-painted artwork across all 144 tiles.</p>
+
+    <div class="upload-grid" id="upload-grid"></div>
+
+    <div class="select-all-row">
+      <button class="select-all-btn" onclick="selectAll()">Select All</button>
+      <button class="select-all-btn" onclick="selectNone()">Deselect All</button>
+      <span class="progress-text" id="progress-text"></span>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <div class="section-label">Art Style</div>
+      <div class="art-style-grid">
+        <button class="art-btn active" onclick="setArtStyle('illustrated',this)">
+          <div class="art-btn-swatch swatch-illustrated">🎴</div>
+          <div class="art-btn-label">Illustrated</div>
+        </button>
+        <button class="art-btn" onclick="setArtStyle('watercolor',this)">
+          <div class="art-btn-swatch swatch-watercolor">🎨</div>
+          <div class="art-btn-label">Watercolor</div>
+        </button>
+        <button class="art-btn" onclick="setArtStyle('bold',this)">
+          <div class="art-btn-swatch swatch-bold">✨</div>
+          <div class="art-btn-label">Bold</div>
+        </button>
+      </div>
+      <div class="art-style-desc" id="art-desc">Hand-painted illustration — the classic mahjong tile look.</div>
+    </div>
+
+    <div class="overlay-section">
+      <div class="section-label">Number Overlay</div>
+      <div class="style-picker">
+        <button class="style-btn active" onclick="setOverlay('minimal',this)">Minimal</button>
+        <button class="style-btn" onclick="setOverlay('classic',this)">Classic</button>
+        <button class="style-btn" onclick="setOverlay('bold',this)">Bold</button>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="generate-btn" id="generate-btn" onclick="generateAll()">✦ Paint My Tiles →</button>
+      <button class="regen-btn" id="regen-btn" onclick="regenerateSelected()">🔄 Regen Selected</button>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="preview-header">
+      <div class="preview-title">Live Preview</div>
+      <div class="tile-count" id="tile-count">Upload images to begin</div>
+    </div>
+    <div class="active-style-badge">
+      <span id="active-style-icon">🎴</span>
+      <span id="active-style-name">ILLUSTRATED</span>
+    </div>
+    <div class="category-tabs">
+      <button class="tab active" onclick="showCategory('bam',this)">Bams</button>
+      <button class="tab" onclick="showCategory('crak',this)">Craks</button>
+      <button class="tab" onclick="showCategory('dot',this)">Dots</button>
+      <button class="tab" onclick="showCategory('winds',this)">Winds</button>
+      <button class="tab" onclick="showCategory('dragons',this)">Dragons</button>
+      <button class="tab" onclick="showCategory('jokers',this)">Jokers</button>
+    </div>
+    <div class="tile-grid" id="tile-grid"></div>
+    <div class="preview-note">Hover a tile · Switch styles · AI paints your photos</div>
+  </div>
+</div>
+
+<div class="bottom-cta">
+  <div class="cta-text">
+    <h3>Ready to order your custom set?</h3>
+    <p>144 tiles · Hand-painted artwork · Ships in 3–4 weeks</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:20px;">
+    <div class="price-tag" id="price-display">$189 <span>/ set</span></div>
+    <button class="order-btn">Order This Set</button>
+  </div>
+</div>
+
+<script>
+  const images = {}, aiImages = {}, savedImages = {};
+  let currentArtStyle = 'illustrated', currentOverlay = 'minimal', currentCategory = 'bam', isGenerating = false;
+
+  const SLOTS = ['bam','crak','dot','wind','dragon','joker'];
+  const SLOT_INFO = {
+    bam: {icon:'🎋', name:'Bam Suit', sub:'36 tiles · 1–9'},
+    crak: {icon:'🀄', name:'Crak Suit', sub:'36 tiles · 1–9'},
+    dot: {icon:'⚫', name:'Dot Suit', sub:'36 tiles · 1–9'},
+    wind: {icon:'🌬', name:'Winds', sub:'E·S·W·N × 4'},
+    dragon: {icon:'🐉', name:'Dragons', sub:'Red·Green·Soap × 4'},
+    joker: {icon:'🃏', name:'Jokers', sub:'8 identical tiles'},
+  };
+  const SUIT_NUMBERS = [1,2,3,4,5,6,7,8,9];
+  const WINDS = ['E','S','W','N'];
+  const DRAGONS = ['RED','GRN','白'];
+  const DRAGON_EXTRA = ['honor-red','honor-green','honor-soap'];
+
+  const ART_STYLES = {
+    illustrated: { icon:'🎴', label:'ILLUSTRATED', desc:'Hand-painted illustration — the classic mahjong tile look.', price:189, prompt:'traditional hand-painted illustration, mahjong tile art style, clean elegant brushwork, decorative, fine detail' },
+    watercolor:  { icon:'🎨', label:'WATERCOLOR',  desc:'Soft dreamy watercolor washes — gift-worthy elegance.', price:219, prompt:'watercolor painting, soft washes, painterly, delicate brushstrokes, artistic' },
+    bold:        { icon:'✨', label:'BOLD',         desc:'Vivid graphic pop — modern and eye-catching.', price:219, prompt:'bold graphic illustration, vivid saturated colors, clean lines, modern pop art style' },
+  };
+
+  // Build upload slots
+  function buildSlots() {
+    const grid = document.getElementById('upload-grid');
+    grid.innerHTML = '';
+    SLOTS.forEach(slot => {
+      const info = SLOT_INFO[slot];
+      const div = document.createElement('div');
+      div.className = 'upload-slot';
+      div.id = 'slot-'+slot;
+      div.onclick = () => triggerUpload(slot);
+      div.innerHTML = `
+        <input type="file" id="upload-${slot}" accept="image/*" onchange="handleUpload('${slot}',this)">
+        <div class="slot-header">
+          <div class="slot-label">${info.icon} ${info.name}</div>
+          <label class="slot-check">
+            <input type="checkbox" id="check-${slot}" checked onclick="event.stopPropagation()">
+            <span>REGEN</span>
+          </label>
+        </div>
+        <div class="slot-sublabel">${info.sub}</div>
+        <img class="slot-preview" id="preview-${slot}">
+        <img class="slot-ai-preview" id="ai-preview-${slot}">
+        <div class="slot-status" id="status-${slot}"></div>
+        <div class="saved-versions" id="saved-${slot}"></div>
+      `;
+      grid.appendChild(div);
+    });
+  }
+
+  const MAX_FREE_GENS = 3, MAX_SESSION_GENS = 20, RATE_LIMIT_MS = 30000;
+  let freeGensUsed = 0, sessionGensUsed = 0, lastGenTime = {};
+
+  function renderGenDots() {
+    const container = document.getElementById('gen-dots');
+    const label = document.getElementById('gen-label-text');
+    container.innerHTML = '';
+    const remaining = Math.max(0, MAX_FREE_GENS - freeGensUsed);
+    for (let i = 0; i < MAX_FREE_GENS; i++) {
+      const dot = document.createElement('div');
+      const isUsed = i >= remaining;
+      const isLast = remaining === 1 && i === 0;
+      dot.className = 'gen-dot' + (isUsed ? ' used' : '') + (isLast ? ' last' : '');
+      container.appendChild(dot);
+    }
+    if (remaining === 0) { label.textContent = 'ORDER TO UNLOCK'; label.style.color = '#FF6B6B'; }
+    else { label.textContent = remaining + ' LEFT'; label.style.color = ''; }
+  }
+
+  function checkRateLimit(slot) {
+    const diff = Date.now() - (lastGenTime[slot] || 0);
+    return diff < RATE_LIMIT_MS ? Math.ceil((RATE_LIMIT_MS - diff) / 1000) : 0;
+  }
+  function canGenerate() {
+    if (freeGensUsed >= MAX_FREE_GENS || sessionGensUsed >= MAX_SESSION_GENS) {
+      document.getElementById('limit-overlay').classList.add('visible');
+      return false;
+    }
+    return true;
+  }
+
+  function triggerUpload(slot) { document.getElementById('upload-'+slot).click(); }
+
+  function handleUpload(slot, input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      images[slot] = e.target.result;
+      const prev = document.getElementById('preview-'+slot);
+      prev.src = e.target.result; prev.classList.add('visible');
+      document.getElementById('slot-'+slot).classList.add('filled');
+      delete aiImages[slot];
+      document.getElementById('ai-preview-'+slot).classList.remove('visible');
+      document.getElementById('status-'+slot).textContent = '';
+      refreshGrid();
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+
+  // Calls OUR serverless function, not Replicate directly. Key stays hidden.
+  async function transformImage(slot, imageDataUrl, stylePrompt) {
+    setSlotStatus(slot, 'generating', '⟳ Painting...');
+    document.getElementById('slot-'+slot).classList.add('processing');
+    document.getElementById('slot-'+slot).classList.remove('done');
+    try {
+      const createRes = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', image: imageDataUrl, prompt: stylePrompt })
+      });
+      if (!createRes.ok) { const e = await createRes.json(); throw new Error(e.error || 'API error'); }
+      const prediction = await createRes.json();
+      return await pollPrediction(prediction.id, slot);
+    } catch (err) {
+      console.error(err);
+      setSlotStatus(slot, 'error', '✗ ' + (err.message || 'Error'));
+      document.getElementById('slot-'+slot).classList.remove('processing');
+      return null;
+    }
+  }
+
+  async function pollPrediction(predictionId, slot) {
+    for (let attempts = 0; attempts < 60; attempts++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'poll', predictionId })
+      });
+      const data = await res.json();
+      if (data.status === 'succeeded') return Array.isArray(data.output) ? data.output[0] : data.output;
+      if (data.status === 'failed') throw new Error(data.error || 'Generation failed');
+      setSlotStatus(slot, 'generating', `⟳ Painting... (${(attempts+1)*2}s)`);
+    }
+    throw new Error('Timeout — try again');
+  }
+
+  function setSlotStatus(slot, type, msg) {
+    const el = document.getElementById('status-'+slot);
+    el.textContent = msg; el.className = 'slot-status ' + type;
+  }
+
+  function saveVersion(slot, imgUrl) {
+    if (!savedImages[slot]) savedImages[slot] = [];
+    if (savedImages[slot].includes(imgUrl)) return;
+    if (savedImages[slot].length >= 4) savedImages[slot].shift();
+    savedImages[slot].push(imgUrl);
+    renderSavedVersions(slot);
+  }
+  function renderSavedVersions(slot) {
+    const container = document.getElementById('saved-'+slot);
+    container.innerHTML = '';
+    (savedImages[slot] || []).forEach((url, i) => {
+      const img = document.createElement('img');
+      img.className = 'saved-thumb' + (aiImages[slot] === url ? ' active-thumb' : '');
+      img.src = url; img.title = `Version ${i+1}`;
+      img.onclick = e => { e.stopPropagation(); aiImages[slot] = url; document.getElementById('ai-preview-'+slot).src = url; refreshGrid(); renderSavedVersions(slot); };
+      container.appendChild(img);
+    });
+  }
+
+  async function generateAll() {
+    const filled = SLOTS.filter(s => images[s]);
+    if (!filled.length) { alert('Upload at least one image first!'); return; }
+    if (isGenerating || !canGenerate()) return;
+    isGenerating = true;
+    document.getElementById('generate-btn').disabled = true;
+    document.getElementById('regen-btn').disabled = true;
+    const prompt = ART_STYLES[currentArtStyle].prompt;
+    await Promise.allSettled(filled.map(s => processSlot(s, prompt)));
+    isGenerating = false;
+    document.getElementById('generate-btn').disabled = false;
+    document.getElementById('regen-btn').disabled = false;
+    refreshGrid();
+  }
+
+  async function regenerateSelected() {
+    if (isGenerating || !canGenerate()) return;
+    const selected = SLOTS.filter(s => { const cb = document.getElementById('check-'+s); return cb && cb.checked && images[s]; });
+    if (!selected.length) { alert('Select at least one slot to regenerate!'); return; }
+    for (const slot of selected) {
+      const wait = checkRateLimit(slot);
+      if (wait > 0) { alert(`Please wait ${wait} seconds before regenerating ${slot} again.`); return; }
+    }
+    isGenerating = true;
+    document.getElementById('generate-btn').disabled = true;
+    document.getElementById('regen-btn').disabled = true;
+    const prompt = ART_STYLES[currentArtStyle].prompt;
+    await Promise.allSettled(selected.map(s => processSlot(s, prompt)));
+    isGenerating = false;
+    document.getElementById('generate-btn').disabled = false;
+    document.getElementById('regen-btn').disabled = false;
+    refreshGrid();
+  }
+
+  async function processSlot(slot, prompt) {
+    if (!images[slot]) return;
+    if (aiImages[slot]) saveVersion(slot, aiImages[slot]);
+    freeGensUsed++; sessionGensUsed++; lastGenTime[slot] = Date.now();
+    renderGenDots();
+    const result = await transformImage(slot, images[slot], prompt);
+    if (result) {
+      aiImages[slot] = result;
+      const aiPrev = document.getElementById('ai-preview-'+slot);
+      aiPrev.src = result; aiPrev.classList.add('visible');
+      setSlotStatus(slot, 'done', '✓ Done — tap thumbnails to compare');
+      document.getElementById('slot-'+slot).classList.remove('processing');
+      document.getElementById('slot-'+slot).classList.add('done');
+      saveVersion(slot, result);
+      refreshGrid();
+    }
+  }
+
+  function updateProgress() {
+    const done = SLOTS.filter(s => aiImages[s]).length;
+    const total = SLOTS.filter(s => images[s]).length;
+    document.getElementById('progress-text').textContent = total > 0 ? `${done}/${total} painted` : '';
+  }
+  function selectAll() { SLOTS.forEach(s => { const cb = document.getElementById('check-'+s); if(cb) cb.checked = true; }); }
+  function selectNone() { SLOTS.forEach(s => { const cb = document.getElementById('check-'+s); if(cb) cb.checked = false; }); }
+
+  function setArtStyle(style, btn) {
+    currentArtStyle = style;
+    document.querySelectorAll('.art-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const s = ART_STYLES[style];
+    document.getElementById('art-desc').textContent = s.desc;
+    document.getElementById('active-style-icon').textContent = s.icon;
+    document.getElementById('active-style-name').textContent = s.label;
+    document.getElementById('price-display').innerHTML = `$${s.price} <span>/ set</span>`;
+    refreshGrid();
+  }
+  function setOverlay(style, btn) {
+    currentOverlay = style;
+    document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    refreshGrid();
+  }
+  function showCategory(cat, btn) {
+    currentCategory = cat;
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    refreshGrid();
+  }
+  function getDisplayImage(slot) { return aiImages[slot] || images[slot] || null; }
+
+  function makeTile(slot, number, suitIcon, extraClass) {
+    const imgSrc = getDisplayImage(slot);
+    const tile = document.createElement('div');
+    const isLoading = document.getElementById('slot-'+slot)?.classList.contains('processing');
+    tile.className = `tile overlay-${currentOverlay} ${extraClass||''} ${isLoading && !aiImages[slot] ? 'tile-loading' : ''}`;
+    if (!imgSrc) tile.classList.add('tile-empty');
+    const inner = document.createElement('div'); inner.className = 'tile-inner';
+    if (imgSrc && !isLoading) {
+      const img = document.createElement('img');
+      img.className = aiImages[slot] ? 'tile-img' : `tile-img filter-${currentArtStyle}`;
+      img.src = imgSrc; inner.appendChild(img);
+      const obg = document.createElement('div'); obg.className = 'overlay-bg'; inner.appendChild(obg);
+      const overlay = document.createElement('div'); overlay.className = 'tile-overlay';
+      if (number !== undefined) { const n = document.createElement('div'); n.className = 'tile-number'; n.textContent = number; overlay.appendChild(n); }
+      if (suitIcon) { const s = document.createElement('div'); s.className = 'tile-suit-icon'; s.textContent = suitIcon; overlay.appendChild(s); }
+      inner.appendChild(overlay);
+    } else if (!imgSrc) {
+      const ph = document.createElement('div'); ph.className = 'tile-placeholder'; ph.textContent = number || '?'; inner.appendChild(ph);
+    }
+    tile.appendChild(inner); return tile;
+  }
+  function makeHonorTile(slot, text, extraClass) {
+    const imgSrc = getDisplayImage(slot);
+    const tile = document.createElement('div');
+    const isLoading = document.getElementById('slot-'+slot)?.classList.contains('processing');
+    tile.className = `tile overlay-${currentOverlay} ${extraClass||''} ${isLoading && !aiImages[slot] ? 'tile-loading' : ''}`;
+    if (!imgSrc) tile.classList.add('tile-empty');
+    const inner = document.createElement('div'); inner.className = 'tile-inner';
+    if (imgSrc && !isLoading) {
+      const img = document.createElement('img');
+      img.className = aiImages[slot] ? 'tile-img' : `tile-img filter-${currentArtStyle}`;
+      img.src = imgSrc; inner.appendChild(img);
+      const obg = document.createElement('div'); obg.className = 'overlay-bg'; inner.appendChild(obg);
+      const overlay = document.createElement('div'); overlay.className = 'tile-overlay';
+      const t = document.createElement('div'); t.className = 'tile-honor-text'; t.textContent = text; overlay.appendChild(t);
+      inner.appendChild(overlay);
+    } else if (!imgSrc) {
+      const ph = document.createElement('div'); ph.className = 'tile-placeholder'; ph.textContent = text; inner.appendChild(ph);
+    }
+    tile.appendChild(inner); return tile;
+  }
+
+  function refreshGrid() {
+    const grid = document.getElementById('tile-grid');
+    grid.innerHTML = '';
+    const renders = {
+      bam:     () => { updateCount('Bam Suit · 36 tiles'); SUIT_NUMBERS.forEach(n => grid.appendChild(makeTile('bam', n, '竹', 'suit-bam'))); },
+      crak:    () => { updateCount('Crak Suit · 36 tiles'); SUIT_NUMBERS.forEach(n => grid.appendChild(makeTile('crak', n, '萬', 'suit-crak'))); },
+      dot:     () => { updateCount('Dot Suit · 36 tiles'); SUIT_NUMBERS.forEach(n => grid.appendChild(makeTile('dot', n, '●', 'suit-dot'))); },
+      winds:   () => { updateCount('Winds · 16 tiles'); WINDS.forEach(w => grid.appendChild(makeHonorTile('wind', w, ''))); },
+      dragons: () => { updateCount('Dragons · 12 tiles'); DRAGONS.forEach((d,i) => grid.appendChild(makeHonorTile('dragon', d, DRAGON_EXTRA[i]))); },
+      jokers:  () => { updateCount('Jokers · 8 tiles'); for(let i=0;i<8;i++) grid.appendChild(makeHonorTile('joker', 'JOKER', 'tile-joker')); },
+    };
+    (renders[currentCategory] || renders.bam)();
+    grid.querySelectorAll('.tile').forEach((t,i) => { t.style.animationDelay = `${i*25}ms`; });
+    updateProgress();
+  }
+  function updateCount(text) { document.getElementById('tile-count').textContent = text; }
+
+  buildSlots();
+  renderGenDots();
+  refreshGrid();
+</script>
+</body>
+</html>
